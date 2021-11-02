@@ -2,8 +2,21 @@ const express = require("express");
 const { MongoClient } = require("mongodb");
 require("dotenv").config();
 const cors = require("cors");
+// for jwt token
+var admin = require("firebase-admin");
+// above one is enough, so ignore the below line
+// const { initializeApp } = require("firebase-admin/app");
+
 const app = express();
 const port = process.env.PORT || 5000;
+
+// firebase admin initialization
+
+var serviceAccount = require("./ema-john-simple-1045c-firebase-adminsdk-dfc9t-0e0a8fcfbc.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 // middleware
 app.use(cors());
@@ -14,6 +27,21 @@ const client = new MongoClient(uri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
+
+// async function to verify jwt token
+async function verifyToken(req, res, next) {
+  if (req.headers?.authorization?.startsWith("Bearer ")) {
+    // get the token by spliting the whole string
+    const idToken = req.headers.authorization.split("Bearer ")[1];
+    try {
+      // verify the email
+      const decodedUser = await admin.auth().verifyIdToken(idToken);
+      // get the email
+      req.decodedUserEmail = decodedUser.email;
+    } catch {}
+  }
+  next();
+}
 
 async function run() {
   try {
@@ -52,24 +80,25 @@ async function run() {
     });
 
     // Get Orders API (GET)
-    app.get("/orders", async (req, res) => {
-      let query = {}; // first set default query to all
+    app.get("/orders", verifyToken, async (req, res) => {
       const email = req.query.email; // get current users email
-      if (email) {
-        query = { email: email }; // set current users email to query
+      // only give information if both the email matched
+      if (req.decodedUserEmail === email) {
+        // set current users email to query
+        const query = { email: email };
+        // pass the query
+        const cursor = orderCollection.find(query);
+        const orders = await cursor.toArray();
+        res.json(orders);
+      } else {
+        res.status(401).json({ message: "Unauthorize User" });
       }
-      const cursor = orderCollection.find(query); // pass the query
-      const orders = await cursor.toArray();
-      res.json(orders);
     });
 
     // Add Orders API (POST)
     app.post("/orders", async (req, res) => {
       const order = req.body;
-      console.log(req.body);
       order.createdAt = new Date();
-      console.log(order);
-      console.log(order.createdAt);
       const result = await orderCollection.insertOne(order);
       res.json(result);
     });
