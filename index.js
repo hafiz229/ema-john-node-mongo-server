@@ -51,9 +51,20 @@ async function run() {
       res.send(products);
     });
 
+    // Get Orders API (GET)
+    app.get("/orders", async (req, res) => {
+      const cursor = orderCollection.find({});
+      const orders = await cursor.toArray();
+      res.json(orders);
+    });
+
     // Add Orders API (POST)
     app.post("/orders", async (req, res) => {
       const order = req.body;
+      console.log(req.body);
+      order.createdAt = new Date();
+      console.log(order);
+      console.log(order.createdAt);
       const result = await orderCollection.insertOne(order);
       res.json(result);
     });
